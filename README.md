@@ -1,6 +1,6 @@
-# backend
+# Reparin API (Swift)
 
-Backend marketplace jasa service gadget berbasis Vapor + Fluent + PostgreSQL.
+Reparin API build with Swift (Vapor + Fluent + PostgreSQL).
 
 ## Getting Started
 
