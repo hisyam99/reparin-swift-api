@@ -20,65 +20,78 @@ struct backendTests {
         try await app.asyncShutdown()
     }
     
-    @Test("Test Hello World Route")
-    func helloWorld() async throws {
+    @Test("Health Route")
+    func healthRoute() async throws {
         try await withApp { app in
-            try await app.testing().test(.GET, "hello", afterResponse: { res async in
+            try await app.testing().test(.GET, "health", afterResponse: { res async in
                 #expect(res.status == .ok)
-                #expect(res.body.string == "Hello, world!")
             })
         }
     }
-    
-    @Test("Getting all the Todos")
-    func getAllTodos() async throws {
+
+    @Test("Register and Login")
+    func registerAndLogin() async throws {
         try await withApp { app in
-            let sampleTodos = [Todo(title: "sample1"), Todo(title: "sample2")]
-            try await sampleTodos.create(on: app.db)
-            
-            try await app.testing().test(.GET, "todos", afterResponse: { res async throws in
-                #expect(res.status == .ok)
-                #expect(try
-                    res.content.decode([TodoDTO].self).sorted(by: { ($0.title ?? "") < ($1.title ?? "") }) ==
-                    sampleTodos.map { $0.toDTO() }.sorted(by: { ($0.title ?? "") < ($1.title ?? "") })
-                )
-            })
-        }
-    }
-    
-    @Test("Creating a Todo")
-    func createTodo() async throws {
-        let newDTO = TodoDTO(id: nil, title: "test")
-        
-        try await withApp { app in
-            try await app.testing().test(.POST, "todos", beforeRequest: { req in
-                try req.content.encode(newDTO)
+            let registerPayload = RegisterRequest(name: "Hisyam", email: "hisyam@mail.com", password: "password123")
+
+            try await app.testing().test(.POST, "api/v1/auth/register", beforeRequest: { req in
+                try req.content.encode(registerPayload)
             }, afterResponse: { res async throws in
                 #expect(res.status == .ok)
-                let models = try await Todo.query(on: app.db).all()
-                #expect(models.map({ $0.toDTO().title }) == [newDTO.title])
+                let auth = try res.content.decode(AuthResponse.self)
+                #expect(!auth.token.isEmpty)
+                #expect(auth.user.email == registerPayload.email)
             })
-        }
-    }
-    
-    @Test("Deleting a Todo")
-    func deleteTodo() async throws {
-        let testTodos = [Todo(title: "test1"), Todo(title: "test2")]
-        
-        try await withApp { app in
-            try await testTodos.create(on: app.db)
-            
-            try await app.testing().test(.DELETE, "todos/\(testTodos[0].requireID())", afterResponse: { res async throws in
-                #expect(res.status == .noContent)
-                let model = try await Todo.find(testTodos[0].id, on: app.db)
-                #expect(model == nil)
-            })
-        }
-    }
-}
 
-extension TodoDTO: Equatable {
-    public static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.id == rhs.id && lhs.title == rhs.title
+            try await app.testing().test(.POST, "api/v1/auth/login", beforeRequest: { req in
+                try req.content.encode(LoginRequest(email: registerPayload.email, password: registerPayload.password))
+            }, afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                let auth = try res.content.decode(AuthResponse.self)
+                #expect(!auth.token.isEmpty)
+            })
+        }
+    }
+
+    @Test("List services and create booking")
+    func servicesAndBooking() async throws {
+        try await withApp { app in
+            let registerPayload = RegisterRequest(name: "Booker", email: "booker@mail.com", password: "password123")
+            let token = try await register(registerPayload, app: app)
+
+            let serviceID = try #require(try await ServiceListing.query(on: app.db).first()?.id)
+
+            try await app.testing().test(.GET, "api/v1/services", afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                let services = try res.content.decode([ServiceResponse].self)
+                #expect(!services.isEmpty)
+            })
+
+            try await app.testing().test(.POST, "api/v1/bookings", beforeRequest: { req in
+                req.headers.bearerAuthorization = .init(token: token)
+                try req.content.encode(
+                    CreateBookingRequest(
+                        serviceID: serviceID,
+                        scheduledAt: Date().addingTimeInterval(86_400),
+                        customerNote: "Datang sore"
+                    )
+                )
+            }, afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                let booking = try res.content.decode(BookingResponse.self)
+                #expect(booking.status == .requested)
+            })
+        }
+    }
+
+    private func register(_ payload: RegisterRequest, app: Application) async throws -> String {
+        var token = ""
+        try await app.testing().test(.POST, "api/v1/auth/register", beforeRequest: { req in
+            try req.content.encode(payload)
+        }, afterResponse: { res async throws in
+            let auth = try res.content.decode(AuthResponse.self)
+            token = auth.token
+        })
+        return token
     }
 }
