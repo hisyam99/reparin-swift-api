@@ -4,7 +4,7 @@ Backend marketplace jasa service gadget berbasis Vapor + Fluent + PostgreSQL.
 
 ## Getting Started
 
-### Environment
+### Environment (.env)
 
 Default koneksi database sudah diarahkan ke:
 
@@ -14,7 +14,9 @@ Default koneksi database sudah diarahkan ke:
 - `DATABASE_PASSWORD=postgres`
 - `DATABASE_NAME=hisyam-swift1`
 
-Anda tetap bisa override via environment variable sebelum run.
+Loader `.env` dibaca otomatis saat app startup (`entrypoint.swift`), jadi buat/ubah file:
+
+- `backend/.env`
 
 ### Build
 

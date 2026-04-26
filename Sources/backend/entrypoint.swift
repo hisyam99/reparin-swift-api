@@ -6,6 +6,7 @@ import NIOPosix
 @main
 enum Entrypoint {
     static func main() async throws {
+        DotEnvLoader.load()
         var env = try Environment.detect()
         try LoggingSystem.bootstrap(from: &env)
         
